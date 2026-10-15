@@ -41,9 +41,6 @@ def solve_system(t_start: int | float,
 
     method - меняйте только если знаете зачем 
     """
-    # t_eval = np.linspace(t_span[0], t_span[1], 1000)
-    
-    # новый вариант расчета t_eval
     smooth_grid = np.linspace(t_span[0], t_span[1], 1000)
 
     start_ceil = int(np.ceil(t_span[0]))
