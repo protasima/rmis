@@ -3,6 +3,7 @@ import numpy as np
 import solve_nmdq
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
+from datetime import datetime
 
 # параметры симуляции
 t_start = 0
@@ -11,13 +12,71 @@ t_span_normal = (t_start, t_end)
 # массив предельных вероятностей из решения СЛАУ
 p_limits = np.array([0.1502, 0.1074, 0.0633, 0.2354,
                      0.0281, 0.3338, 0.0818])
+
+p_start_init = [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+p_start_error = None 
+title = "Моделирование атаки на систему"
+
+
+# TODO: добавить сохранение результатов в файл в виде форматированного ввода
+# текущее состояние - только вывод в консоль
+# сохранять: 
+# статические параметры симуляции - два начальных состояния, t_start, t_end, epsilon
+# динамические параметры симуляции - t*, вероятности в точке t*, t', delta t
+
+
 # точность совпадения 
 epsilon = 0.0001
+
+
+
+# добавлены различные варианты симуляции
+# выбор в соответствии с вводом пользователя в командную строку
+# ввод повторяется до совпадения с конкретным вариантом
+# для каждого варианта изменяется только p_start_error
+# т.е. начальное состояние системы после атаки
+print("Начало работы скрипта. Выберите вариант атаки (режим моделирования):")
+print("1. Моделирование DDOS-атаки с полным сбросом системы, p0(t*) = 1.0, pi(t*) = 0.0, i != 0.0;")
+print("2. Моделирование DDOS-атаки с частичным восстановлением системы, p0(t*) = 0.3, p4(t*) = 0.7, pi(t*) = 0.0;")
+print("3. Моделирование нарушения доступности с полным восстановлением (ранд. вероятности);")
+print("4. Моделирование нарушения доступности с полным восстановлением (равновероятные).")
+print("Выберите пункт для дальнейшей работы: ", end = "")
+user_choice: str = None
+while user_choice not in ['1', '2', '3', '4']:
+    # 1. симуляция DDOS-атаки с полным сбросом системы
+    user_choice = input()
+    match user_choice:
+        case '1': 
+            p_start_error = [1.0, 0.0, 0.0, 0.0, 
+                                    0.0, 0.0, 0.0]
+            # p0(t*) = 1.0, pi(t*) = 0.0, i != 0
+            title = "Моделирование DDOS-атаки с полным сбросом системы."
+        case '2': 
+            # восстанавливается очередь и начальное состояние
+            p_start_error = [0.3, 0.0, 0.0, 0.0,
+                                   0.7, 0.0, 0.0]
+            # p0(t*) = 0.3, p4(t*) = 0.7, pi(t*) = 0.0
+            title = "Моделирование DDOS-атаки с полным сбросом системы."
+        case '3': 
+            # физически - небольшой лаг, глиттер канала передачи данных
+            # со стороны пользователя - пропадает сигнал на от 2 до 10 секунд   
+            random_numbers = np.random.rand(7)
+            p_start_error = random_numbers / np.sum(random_numbers)
+            # случайные вероятности
+            title = "Моделирование нарушения доступности с полным восстановлением (ранд. вероятности)"
+        case '4': 
+            p_start_error = [0.142, 0.143, 0.143, 0.143,
+                                   0.143, 0.143, 0.143]
+            # равновероятные состояния
+            title = "Моделирование нарушения доступности с полным восстановлением (равновероятные)"
+        case '_': print('Не найдено совпадений. Повторите ввод: ', end="")
+    
+
+
 
 # момент времени, с которого система стабилизировалась после атаки
 t_stab = None
 idx_stab = None
-
 
 
 # генерируем случайную точку разрыва t*
@@ -29,8 +88,7 @@ print(f"Случайная точка разрыва t* сгенерирован
 # получаем значения СДУ при начальных условиях
 # и нормальной работе системы
 normal_sol = solve_nmdq.solve_system(t_start, 
-                                   [1.0, 0.0, 0.0, 0.0, 
-                                    0.0, 0.0, 0.0], 
+                                   p_start_init, 
                                    t_span_normal)
 
 # фиксируем значения вероятностей в точке t_attack
@@ -46,9 +104,8 @@ else:
 # и атаке на систему, т.е. p0(t*) = 1.0, p1(t*) = 0.0 ...
 t_span_attack = (t_attack, t_end)
 attack_sol = solve_nmdq.solve_system(t_attack,
-                                    [1.0, 0.0, 0.0, 0.0, 
-                                     0.0, 0.0, 0.0],
-                                     t_span_attack)
+                                    p_start_error,
+                                    t_span_attack)
 
 # ищем момент времени, с которого система стабилизировалась
 for idx in range(len(attack_sol.t)):
@@ -81,6 +138,30 @@ else:
         diff_str = f"{np.abs(current_p[i] - p_limits[i]):.4f}"
         print(f"{p_curr_str:<{24}}{p_lim_str:<{25}}{diff_str:<{10}}")
 
+# вывод для сохранения в файле
+record: dict = {
+    "static_params": f"Начальное время, t_start: {t_start} ед. вр.\n Конец симуляции, t_end: {t_end} ед. вр.\nТочность совпадения по предельным вероятностям, epsilon: {epsilon}.",
+    "dynamic_params": ""} 
+
+now = datetime.now()
+p_init_str = "".join(f"\t\tp{i}(0) = {val:.2f}\n" for i, val in enumerate(p_start_init)) #нач. знач. до атаки
+p_at_attack_str = "".join(f"\t\tp{i}(t*) = {val:.2f}\n" for i, val in enumerate(p_values_at_t_attack)) #знач. вер. в момент атаки
+p_error_str = "".join(f"\t\tp{i}(t*+1) = {val:.2f}\n" for i, val in enumerate(p_start_error)) #нач. знач. после атаки
+
+to_save = (
+    f"\n---------------------------------------------\n"
+    f"-- Моделирование атаки на систему ({user_choice} вариант). {now.year}-{now.month}-{now.day} {now.hour}:{now.minute}.\n"
+    f"-- Статические параметры симуляции:\n\t* Точка отсчета, t_start: {t_start} ед. вр.\n\t* Конец симуляции, t_end: {t_end} ед. вр.\n\t* Точность совпадения по предельным вероятностям, epsilon: {epsilon}\n"
+    f"\t* Начальные условия (значения вероятностей) до момента атаки:\n{p_init_str}"
+    f"-- Динамические параметры симуляции:\n\t<- Момент атаки, t*: {t_attack} ед. вр.\n"
+    f"\t* Значения вероятностей в момент атаки:\n{p_at_attack_str}"
+    f"\t* Начальные условия (значения вероятностей) после момента атаки:\n{p_error_str}"
+    f"\t* Момент стабилизации, t_stab: {int(np.ceil(t_stab))} ед. вр.\n\t* Потребовалось для стабилизации, delta_t: {delta_t}\n"
+    f"---------------------------------------------\n"
+)
+with open("results.txt", "+a", encoding="utf-8") as file:
+    file.write(to_save)
+
 # ЧАСТЬ ОТРИСОВКИ ГРАФИКА И АНИМАЦИИ
 
 # ОБЪЕДИНЕНИЕ ДАННЫХ
@@ -109,15 +190,12 @@ ax.set_xlim(t_start, t_end)
 ax.set_ylim(0, 1.05)
 ax.set_xlabel("Время t", fontsize = 12)
 ax.set_ylabel("Вероятности состояний p_i(t)", fontsize = 12)
-ax.set_title("Моделирование атаки на систему", fontsize = 14)
+ax.set_title(title, fontsize = 14)
 ax.grid(True, linestyle = ":", alpha = 0.6)
-print(int(np.ceil(t_stab)))
 # настройка оси t
 base_ticks = list(range(int(t_start), int(t_end) + 1, 2))
 if t_attack not in base_ticks: base_ticks.append(t_attack)
-if int(np.ceil(t_stab)) not in base_ticks: 
-    print('da') 
-    base_ticks.append(t_stab)
+if int(np.ceil(t_stab)) not in base_ticks: base_ticks.append(int(np.ceil(t_stab)))
 base_ticks = sorted(base_ticks)
 labels = []
 for t in base_ticks:
@@ -225,6 +303,7 @@ def update(frame):
 # ЗАПУСК АНИМАЦИИ
 ani = animation.FuncAnimation(
     fig, update, frames = total_frames, init_func=init,
-    interval = 10, blit = True, repeat = False)
+    interval = 1, blit = True, repeat = False)
+
 
 plt.show()
