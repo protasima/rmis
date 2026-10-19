@@ -218,7 +218,7 @@ for tick_label in ax.get_xticklabels():
 
 
 # линии состояний
-colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', "#0b6e69", '#e377c2']
+colors = ['#1f77b4', '#ff7f0e', '#2ca02c', "#692424", '#9467bd', "#0b6e69", '#e377c2']
 lines = []
 for i in range(7):
     line, = ax.plot([], [], lw=2, color=colors[i], label=f'p{i}(t)')
@@ -247,31 +247,6 @@ def init():
 
     return lines + [v_line_attack, v_line_stab, span_box] # все изменяемые объекты
 
-# обновление меток на оси для t*, t_stab
-def update_axis_labels(show_attack = False, show_stab = False):
-    ticks = list(range(int(t_start), int(t_end) + 1, 2))
-    labels = [str(t) for t in ticks]
-
-    # если прошли точку атаки, добавить t*
-    if show_attack:
-        ticks.append(t_attack)
-        labels.append(f"$t^*={t_attack}$")
-
-    # если прошли точку восстановления, добавить t_stab
-    if show_stab:
-        ticks.append(t_stab)
-        labels.append(f"$t_{{stab}}={np.ceil(t_stab)}$")
-
-    ax.set_xticks(ticks)
-    ax.set_xticklabels(labels)
-
-    for tick_label in ax.get_xticklabels():
-        if "$t^*" in tick_label.get_text():
-            tick_label.set_color('red')
-            tick_label.set_fontweight('bold')
-        elif "$t_{stab}" in tick_label.get_text():
-            tick_label.set_color('green')
-            tick_label.set_fontweight('bold')
 
 def update(frame):
 
